@@ -65,14 +65,19 @@ private:
 		, t_(io_service)
 		, counter(0)
 		, client_no(n)
+		, current_page(1)
 	{
 	}
 
 	void handle_write(const boost::system::error_code& /*error*/)
 	{
-		message_ = "[";
+		message_ += char(0x1B);
+		message_ += 'c';
+		message_ += "[";
 		message_ += __itos(client_no);
-		message_ += "] Sending some data, part ";
+		message_ += "] ("
+		message_ += __itos(current_page);
+		message_ += ") Sending some data, part ";
 		message_ += __itos(counter);
 		message_ += "\n\r";
 		boost::asio::async_write(socket_, boost::asio::buffer(message_),
@@ -95,6 +100,7 @@ private:
 	boost::asio::deadline_timer t_;
 	int counter;
 	int client_no;
+	int current_page;
 };
 
 class tcp_server
