@@ -54,7 +54,7 @@ private:
 	std::string message_;
 	boost::asio::deadline_timer t_;
 	int counter;
-	float refresh_rate;
+	boost::posix_time::time_duration refresh_rate;
 	int current_page;
  */
 
@@ -82,9 +82,11 @@ gui_connection::gui_connection(boost::asio::io_service& io_service, float refres
 	: socket_(io_service)
 	, t_(io_service)
 	, counter(0)
-	, refresh_rate(refresh_rate)
 	, current_page(1)
 {
+	int refresh_rate_sec = int(refresh_rate);
+	int refresh_rate_millisec = int(1000. * float(refresh_rate - refresh_rate_sec));
+	this->refresh_rate = boost::posix_time::seconds(refresh_rate_sec) + boost::posix_time::millisec(refresh_rate_millisec);
 }
 
 void gui_connection::handle_write(const boost::system::error_code& /*error*/)
@@ -100,11 +102,12 @@ void gui_connection::handle_write(const boost::system::error_code& /*error*/)
 	message_ += "\n\r";
 	boost::asio::async_write(socket_, boost::asio::buffer(message_),
 		boost::bind(&gui_connection::empty_handler, shared_from_this()));
+	
 	if (counter == 0) {
-		t_.expires_from_now(boost::posix_time::seconds(1));
+		t_.expires_from_now(refresh_rate);
 	}
 	else {
-		t_.expires_at(t_.expires_at() + boost::posix_time::seconds(1));
+		t_.expires_at(t_.expires_at() + refresh_rate);
 	}
 	t_.async_wait(boost::bind(&gui_connection::handle_write, shared_from_this(),
 		boost::asio::placeholders::error));

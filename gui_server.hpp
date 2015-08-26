@@ -26,7 +26,7 @@ private:
 	std::string message_;
 	boost::asio::deadline_timer t_;
 	int counter;
-	float refresh_rate;
+	boost::posix_time::time_duration refresh_rate;
 	int current_page;
 };
 
