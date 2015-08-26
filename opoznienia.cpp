@@ -1,156 +1,116 @@
-#include <ctime>
 #include <iostream>
 #include <string>
-#include <boost/bind.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/enable_shared_from_this.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/asio.hpp>
+#include <sstream>
+#include "gui_server.hpp"
 
 using boost::asio::ip::tcp;
 
-std::string __itos(int n) {
-	std::string rev = "";
-	if (n == 0) {
-		return std::string("0");
+int parse_int(char* x){
+	std::string str(x);
+	for(unsigned int i = 0; i < str.length(); ++i){
+		if(!isdigit(str[i])){
+			return -1;
+		}
 	}
-	while (n > 0) {
-		rev += char(n % 10 + 48);
-		n /= 10;
+	std::istringstream i(str);
+	int result;
+	if(!(i >> result) || result < 1){
+		return -1;
 	}
-	std::string norm = "";
-	for (int i = rev.length() - 1; i >= 0; --i) {
-		norm += rev[i];
-	}
-	return norm;
+	return result;
 }
 
-std::string hello_message(int n)
+float parse_float(char* x){
+	std::string str(x);
+	bool hasdot = false;
+	for(unsigned int i = 0; i < str.length(); ++i){
+		if(!isdigit(str[i])){
+			if(str[i] == '.'){
+				if(hasdot){
+					return -1;
+				}else{
+					hasdot = true;
+				}
+			}else{
+				return -1;
+			}
+		}
+	}
+	std::istringstream i(str);
+	float result;
+	if(!(i >> result) || result <= 0){
+		return -1;
+	}
+	return result;
+}
+
+
+inline int get_pos_int_parameter(int dif, char* x){
+	if(dif == 1){
+		std::cout << "Expected positive int, got nothing" << std::endl;
+		exit(1);
+	}
+	int result = parse_int(x);
+	if(result == -1){
+		std::cout << "Expected positive int, got " << x << std::endl;
+		exit(1);
+	}
+	return result;
+}
+
+inline float get_pos_float_parameter(int dif, char* x){
+	if(dif == 1){
+		std::cout << "Expected positive float, got nothing" << std::endl;
+		exit(1);
+	}
+	float result = parse_float(x);
+	if(result == -1){
+		std::cout << "Expected positive float, got " << x << std::endl;
+		exit(1);
+	} 
+	return result;
+}
+
+
+int main(int argc, char* argv[])
 {
-	std::string message = "Hello, client number ";
-	message += __itos(n);
-	message += "!\n\r";
-	return message;
+	int udp_delay_port = 3382;
+	int ui_port = 3637;
+	float delay_cooldown_time = 1;
+	float discovery_cooldown_time = 10;
+	float ui_refresh_time = 1; 
+	bool broadcast_ssh = false;
 	
-}
-
-class tcp_connection
-	: public boost::enable_shared_from_this<tcp_connection>
-{
-public:
-	typedef boost::shared_ptr<tcp_connection> pointer;
-
-	static pointer create(boost::asio::io_service& io_service, int n)
-	{
-		return pointer(new tcp_connection(io_service, n));
-	}
-
-	tcp::socket& socket()
-	{
-		return socket_;
-	}
-
-	void start()
-	{
-		message_ = hello_message(client_no);
-
-		boost::asio::async_write(socket_, boost::asio::buffer(message_),
-			boost::bind(&tcp_connection::handle_write, shared_from_this(),
-				boost::asio::placeholders::error));
-	}
-
-private:
-	tcp_connection(boost::asio::io_service& io_service, int n)
-		: socket_(io_service)
-		, t_(io_service)
-		, counter(0)
-		, client_no(n)
-		, current_page(1)
-	{
-	}
-
-	void handle_write(const boost::system::error_code& /*error*/)
-	{
-		message_ += char(0x1B);
-		message_ += 'c';
-		message_ += "[";
-		message_ += __itos(client_no);
-		message_ += "] ("
-		message_ += __itos(current_page);
-		message_ += ") Sending some data, part ";
-		message_ += __itos(counter);
-		message_ += "\n\r";
-		boost::asio::async_write(socket_, boost::asio::buffer(message_),
-			boost::bind(&tcp_connection::empty_handler, shared_from_this()));
-		if (counter == 0) {
-			t_.expires_from_now(boost::posix_time::seconds(1));
+	for(int i = 1; i < argc; i++){
+		int dif = argc - i;
+		if(strcmp(argv[i], "-u") == 0){
+			udp_delay_port = get_pos_int_parameter(dif, argv[++i]);
+		}else if(strcmp(argv[i], "-U") == 0){
+			ui_port = get_pos_int_parameter(dif, argv[++i]);
+		}else if(strcmp(argv[i], "-t") == 0){
+			delay_cooldown_time = get_pos_float_parameter(dif, argv[++i]);
+		}else if(strcmp(argv[i], "-T") == 0){
+			discovery_cooldown_time = get_pos_float_parameter(dif, argv[++i]);
+		}else if(strcmp(argv[i], "-v") == 0){
+			ui_refresh_time = get_pos_float_parameter(dif, argv[++i]);
+		}else if(strcmp(argv[i], "-c") == 0){
+			broadcast_ssh = true;
+		}else{
+			std::cout << "Invalid parameter " << argv[i] << std::endl;
+			return 1;
 		}
-		else {
-			t_.expires_at(t_.expires_at() + boost::posix_time::seconds(1));
-		}
-		t_.async_wait(boost::bind(&tcp_connection::handle_write, shared_from_this(),
-			boost::asio::placeholders::error));
-		counter++;
 	}
+	
+	std::cout << udp_delay_port << std::endl;
+	std::cout << delay_cooldown_time << std::endl;
 
-	void empty_handler() {}
-
-	tcp::socket socket_;
-	std::string message_;
-	boost::asio::deadline_timer t_;
-	int counter;
-	int client_no;
-	int current_page;
-};
-
-class tcp_server
-{
-public:
-	tcp_server(boost::asio::io_service& io_service)
-		: acceptor_(io_service, tcp::endpoint(tcp::v4(), 13))
-		, clients(0)
-	{
-		start_accept();
-	}
-
-private:
-	void start_accept()
-	{
-		tcp_connection::pointer new_connection =
-			tcp_connection::create(acceptor_.get_io_service(), clients);
-
-		clients++;
-
-		acceptor_.async_accept(new_connection->socket(),
-			boost::bind(&tcp_server::handle_accept, this, new_connection,
-				boost::asio::placeholders::error));
-	}
-
-	void handle_accept(tcp_connection::pointer new_connection,
-		const boost::system::error_code& error)
-	{
-		if (!error)
-		{
-			new_connection->start();
-		}
-
-		start_accept();
-	}
-
-	tcp::acceptor acceptor_;
-	int clients;
-};
-
-int main()
-{
-	try
-	{
+	try{
 		boost::asio::io_service io_service;
-		tcp_server server(io_service);
+		gui_server server(io_service, ui_port, ui_refresh_time);
 		io_service.run();
 	}
-	catch (std::exception& e)
-	{
+	catch (std::exception& e){
 		std::cerr << e.what() << std::endl;
 	}
 
