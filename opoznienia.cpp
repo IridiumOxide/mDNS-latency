@@ -3,6 +3,7 @@
 #include <boost/asio.hpp>
 #include <sstream>
 #include "gui_server.hpp"
+#include "data_vector.hpp"
 
 using boost::asio::ip::tcp;
 
@@ -105,9 +106,11 @@ int main(int argc, char* argv[])
 	std::cout << udp_delay_port << std::endl;
 	std::cout << delay_cooldown_time << std::endl;
 
+	dv_init();
+	
 	try{
 		boost::asio::io_service io_service;
-		gui_server server_gui(io_service, ui_port, ui_refresh_time);
+		gui_server server_gui(io_service, ui_port, ui_refresh_time, &(sample_data_vector));
 		std::cout << "UI available on port " << ui_port << std::endl;
 		//mdns_server server_mdns(io_service, discovery_cooldown_time, cast_ssh);
 		io_service.run();

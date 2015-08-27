@@ -12,31 +12,11 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/asio.hpp>
 #include "gui_server.hpp"
+#include "data_vector.hpp"
+
+#define ENTRIES_PER_PAGE 20
 
 using boost::asio::ip::tcp;
-
-std::string __itos(int n)
-{
-	std::string rev = "";
-	if (n == 0) {
-		return std::string("0");
-	}
-	while (n > 0) {
-		rev += char(n % 10 + 48);
-		n /= 10;
-	}
-	std::string norm = "";
-	for (int i = rev.length() - 1; i >= 0; --i) {
-		norm += rev[i];
-	}
-	return norm;
-}
-
-std::string gui_info()
-{
-	static const std::string message = "Hello, client! ::: Q - page up ::: A - page down\n\r";
-	return message;
-}
 
 
 /* *****************
@@ -46,17 +26,20 @@ std::string gui_info()
  /*
 public:
 	typedef boost::shared_ptr<gui_connection> pointer;
-
-	static pointer create(boost::asio::io_service&, int);
+	
+	static pointer create(boost::asio::io_service&,
+		float refresh_rate, data_vector*);
 	tcp::socket& socket();
 	void start();
 	
 private:
-	gui_connection(boost::asio::io_service&, int);
+	gui_connection(boost::asio::io_service&, 
+		float refresh_rate, data_vector*);
 	void handle_write(const boost::system::error_code&);
 	void handle_read(const boost::system::error_code&);
 	void empty_handler();
 	void redraw();
+	std::string gui_info();
 	
 	tcp::socket socket_;
 	std::string message_;
@@ -65,15 +48,17 @@ private:
 	boost::posix_time::time_duration refresh_rate;
 	int current_page;
 	char read_byte[1];
+	data_vector* data;
+	bool end;
  */
 
 
 /* PUBLIC */
 
-gui_connection::pointer gui_connection::create(
-	boost::asio::io_service& io_service, float refresh_rate)
+gui_connection::pointer gui_connection::create(boost::asio::io_service& io_service,
+	float refresh_rate, data_vector* data)
 {
-	return pointer(new gui_connection(io_service, refresh_rate));
+	return pointer(new gui_connection(io_service, refresh_rate, data));
 }
 
 tcp::socket& gui_connection::socket()
@@ -99,11 +84,14 @@ void gui_connection::start()
 
 /* PRIVATE */
 
-gui_connection::gui_connection(boost::asio::io_service& io_service, float refresh_rate)
+gui_connection::gui_connection(boost::asio::io_service& io_service,
+	float refresh_rate, data_vector* data)
 	: socket_(io_service)
 	, t_(io_service)
 	, counter(0)
 	, current_page(1)
+	, data(data)
+	, end(false)
 {
 	int refresh_rate_sec = int(refresh_rate);
 	int refresh_rate_millisec = int(1000. * float(refresh_rate - refresh_rate_sec));
@@ -112,22 +100,7 @@ gui_connection::gui_connection(boost::asio::io_service& io_service, float refres
 
 void gui_connection::handle_write(const boost::system::error_code&)
 {
-	// clean terminal
-	message_ = std::string("\x1B" "c");
-	
-	// gui info
-	message_ += gui_info();
-	message_ += "[ Currently on page ";
-	message_ += __itos(current_page);
-	message_ += " ]\n\r------------------------------------------------\n\r";
-	
-	// actual data
-	message_ += "Sending some data, part ";
-	message_ += __itos(counter);
-	message_ += "\n\r";
-	
-	boost::asio::async_write(socket_, boost::asio::buffer(message_),
-		boost::bind(&gui_connection::empty_handler, shared_from_this()));
+	redraw();
 	
 	if (counter == 0) {
 		t_.expires_from_now(refresh_rate);
@@ -135,33 +108,72 @@ void gui_connection::handle_write(const boost::system::error_code&)
 	else {
 		t_.expires_at(t_.expires_at() + refresh_rate);
 	}
-	t_.async_wait(boost::bind(&gui_connection::handle_write, shared_from_this(),
-		boost::asio::placeholders::error));
+	if(!end){
+		t_.async_wait(boost::bind(&gui_connection::handle_write, shared_from_this(),
+			boost::asio::placeholders::error));
+	}
 	counter++;
 }
 
 void gui_connection::handle_read(const boost::system::error_code&)
 {
-	if(read_byte[0] == 'q'){
+	if(read_byte[0] == 'q' || read_byte[0] == 'Q'){
 		if(current_page > 1){
 			--current_page;
 			redraw();
 		}
-	}else if(read_byte[0] == 'a'){
+	}else if(read_byte[0] == 'a' || read_byte[0] == 'A'){
 		++current_page;
 		redraw();
+	}else if(read_byte[0] == 'e' || read_byte[0] == 'E'){
+		end = true;
 	}
-	socket_.async_read_some(boost::asio::buffer(read_byte),
-		boost::bind(&gui_connection::handle_read, shared_from_this(),
-			boost::asio::placeholders::error));
+	
+	if(!end){
+		socket_.async_read_some(boost::asio::buffer(read_byte),
+			boost::bind(&gui_connection::handle_read, shared_from_this(),
+				boost::asio::placeholders::error));
+	}
 }
 
 void gui_connection::empty_handler() {}
 
 void gui_connection::redraw(){
-	// move pages or sth
-	// doesn't need to be async
-	// ...might reset the timer, cause why not. hm. or why yes.
+	// MUTEX OR SOMETHING
+	int total_entries = (*data).size();
+	int total_pages = ((total_entries - 1) / ENTRIES_PER_PAGE) + 1;
+	if(total_pages < 1)
+		total_pages = 1;
+	
+	// clean terminal
+	message_ = std::string("\x1B" "c");
+	
+	// gui info
+	message_ += gui_info();
+	message_ += "[ Currently on page ";
+	message_ += std::to_string(current_page);
+	message_ += "/";
+	message_ += std::to_string(total_pages);
+	message_ += " ] ::: ";
+	message_ += std::to_string(counter);
+	message_ += " time units since connect";
+	message_ +="\n\r------------------------------------------------\n\r";
+	
+	// actual data
+	int first_entry = (current_page - 1) * ENTRIES_PER_PAGE;
+	int last_entry = std::min(((current_page * ENTRIES_PER_PAGE) - 1), total_entries - 1);
+	for(int i = first_entry; i <= last_entry; ++i){
+		message_ += data_to_string((*data)[i]);
+	}
+	
+	boost::asio::async_write(socket_, boost::asio::buffer(message_),
+		boost::bind(&gui_connection::empty_handler, shared_from_this()));
+}
+
+std::string gui_connection::gui_info()
+{
+	static const std::string message = "NAVIGATION:  Q - page up ::: A - page down ::: E - quit\n\r";
+	return message;
 }
 
 
@@ -171,7 +183,8 @@ void gui_connection::redraw(){
  
  /*
 public:
-	gui_server(boost::asio::io_service&, int port, int refresh_rate);
+	gui_server(boost::asio::io_service&, int port,
+		float refresh_rate, data_vector*);
 
 private:
 	void start_accept();
@@ -179,14 +192,17 @@ private:
 	
 	tcp::acceptor acceptor_;
 	float refresh_rate;
+	data_vector* data;
  */
 
 
 /* PUBLIC */
 
-gui_server::gui_server(boost::asio::io_service& io_service, int port, float refresh_rate)
+gui_server::gui_server(boost::asio::io_service& io_service, int port,
+	float refresh_rate, data_vector* data)
 	: acceptor_(io_service, tcp::endpoint(tcp::v4(), port))
 	, refresh_rate(refresh_rate)
+	, data(data)
 {
 	start_accept();
 }
@@ -197,7 +213,7 @@ gui_server::gui_server(boost::asio::io_service& io_service, int port, float refr
 void gui_server::start_accept()
 {
 	gui_connection::pointer new_connection =
-		gui_connection::create(acceptor_.get_io_service(), refresh_rate);
+		gui_connection::create(acceptor_.get_io_service(), refresh_rate, data);
 	
 	acceptor_.async_accept(new_connection->socket(),
 		boost::bind(&gui_server::handle_accept, this, new_connection,
