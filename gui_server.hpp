@@ -20,7 +20,9 @@ public:
 private:
 	gui_connection(boost::asio::io_service&, float refresh_rate);
 	void handle_write(const boost::system::error_code&);
+	void handle_read(const boost::system::error_code&);
 	void empty_handler();
+	void redraw();
 	
 	tcp::socket socket_;
 	std::string message_;
@@ -28,6 +30,7 @@ private:
 	int counter;
 	boost::posix_time::time_duration refresh_rate;
 	int current_page;
+	char read_byte[1];
 };
 
 class gui_server

@@ -1,3 +1,8 @@
+/*
+ * TODO:
+ * - actual data to display
+ */
+
 #include <ctime>
 #include <iostream>
 #include <string>
@@ -10,7 +15,8 @@
 
 using boost::asio::ip::tcp;
 
-std::string __itos(int n) {
+std::string __itos(int n)
+{
 	std::string rev = "";
 	if (n == 0) {
 		return std::string("0");
@@ -26,9 +32,9 @@ std::string __itos(int n) {
 	return norm;
 }
 
-std::string hello_message()
+std::string gui_info()
 {
-	std::string message = "Hello, client!\n\r";
+	static const std::string message = "Hello, client! ::: Q - page up ::: A - page down\n\r";
 	return message;
 }
 
@@ -48,7 +54,9 @@ public:
 private:
 	gui_connection(boost::asio::io_service&, int);
 	void handle_write(const boost::system::error_code&);
+	void handle_read(const boost::system::error_code&);
 	void empty_handler();
+	void redraw();
 	
 	tcp::socket socket_;
 	std::string message_;
@@ -56,7 +64,11 @@ private:
 	int counter;
 	boost::posix_time::time_duration refresh_rate;
 	int current_page;
+	char read_byte[1];
  */
+
+
+/* PUBLIC */
 
 gui_connection::pointer gui_connection::create(
 	boost::asio::io_service& io_service, float refresh_rate)
@@ -71,12 +83,21 @@ tcp::socket& gui_connection::socket()
 
 void gui_connection::start()
 {
-	message_ = hello_message();
-
+	
+	// turn off echo, turn on character mode
+	message_ = "\377\375\042\377\373\001";
+	
 	boost::asio::async_write(socket_, boost::asio::buffer(message_),
 		boost::bind(&gui_connection::handle_write, shared_from_this(),
 			boost::asio::placeholders::error));
+	
+	socket_.async_read_some(boost::asio::buffer(read_byte),
+		boost::bind(&gui_connection::handle_read, shared_from_this(),
+			boost::asio::placeholders::error));
 }
+
+
+/* PRIVATE */
 
 gui_connection::gui_connection(boost::asio::io_service& io_service, float refresh_rate)
 	: socket_(io_service)
@@ -89,17 +110,22 @@ gui_connection::gui_connection(boost::asio::io_service& io_service, float refres
 	this->refresh_rate = boost::posix_time::seconds(refresh_rate_sec) + boost::posix_time::millisec(refresh_rate_millisec);
 }
 
-void gui_connection::handle_write(const boost::system::error_code& /*error*/)
+void gui_connection::handle_write(const boost::system::error_code&)
 {
 	// clean terminal
-	message_ = char(0x1B);
-	message_ += 'c';
+	message_ = std::string("\x1B" "c");
 	
-	message_ += "(";
+	// gui info
+	message_ += gui_info();
+	message_ += "[ Currently on page ";
 	message_ += __itos(current_page);
-	message_ += ") Sending some data, part ";
+	message_ += " ]\n\r------------------------------------------------\n\r";
+	
+	// actual data
+	message_ += "Sending some data, part ";
 	message_ += __itos(counter);
 	message_ += "\n\r";
+	
 	boost::asio::async_write(socket_, boost::asio::buffer(message_),
 		boost::bind(&gui_connection::empty_handler, shared_from_this()));
 	
@@ -114,7 +140,29 @@ void gui_connection::handle_write(const boost::system::error_code& /*error*/)
 	counter++;
 }
 
+void gui_connection::handle_read(const boost::system::error_code&)
+{
+	if(read_byte[0] == 'q'){
+		if(current_page > 1){
+			--current_page;
+			redraw();
+		}
+	}else if(read_byte[0] == 'a'){
+		++current_page;
+		redraw();
+	}
+	socket_.async_read_some(boost::asio::buffer(read_byte),
+		boost::bind(&gui_connection::handle_read, shared_from_this(),
+			boost::asio::placeholders::error));
+}
+
 void gui_connection::empty_handler() {}
+
+void gui_connection::redraw(){
+	// move pages or sth
+	// doesn't need to be async
+	// ...might reset the timer, cause why not. hm. or why yes.
+}
 
 
 /* ************
@@ -133,6 +181,9 @@ private:
 	float refresh_rate;
  */
 
+
+/* PUBLIC */
+
 gui_server::gui_server(boost::asio::io_service& io_service, int port, float refresh_rate)
 	: acceptor_(io_service, tcp::endpoint(tcp::v4(), port))
 	, refresh_rate(refresh_rate)
@@ -140,6 +191,8 @@ gui_server::gui_server(boost::asio::io_service& io_service, int port, float refr
 	start_accept();
 }
 
+
+/* PRIVATE */
 
 void gui_server::start_accept()
 {

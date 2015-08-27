@@ -80,7 +80,7 @@ int main(int argc, char* argv[])
 	float delay_cooldown_time = 1;
 	float discovery_cooldown_time = 10;
 	float ui_refresh_time = 1; 
-	bool broadcast_ssh = false;
+	bool cast_ssh = false;
 	
 	for(int i = 1; i < argc; i++){
 		int dif = argc - i;
@@ -94,8 +94,8 @@ int main(int argc, char* argv[])
 			discovery_cooldown_time = get_pos_float_parameter(dif, argv[++i]);
 		}else if(strcmp(argv[i], "-v") == 0){
 			ui_refresh_time = get_pos_float_parameter(dif, argv[++i]);
-		}else if(strcmp(argv[i], "-c") == 0){
-			broadcast_ssh = true;
+		}else if(strcmp(argv[i], "-s") == 0){
+			cast_ssh = true;
 		}else{
 			std::cout << "Invalid parameter " << argv[i] << std::endl;
 			return 1;
@@ -107,7 +107,9 @@ int main(int argc, char* argv[])
 
 	try{
 		boost::asio::io_service io_service;
-		gui_server server(io_service, ui_port, ui_refresh_time);
+		gui_server server_gui(io_service, ui_port, ui_refresh_time);
+		std::cout << "UI available on port " << ui_port << std::endl;
+		//mdns_server server_mdns(io_service, discovery_cooldown_time, cast_ssh);
 		io_service.run();
 	}
 	catch (std::exception& e){
