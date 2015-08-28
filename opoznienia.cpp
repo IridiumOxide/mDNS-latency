@@ -105,7 +105,10 @@ int main(int argc, char* argv[])
 	
 	std::cout << udp_delay_port << std::endl;
 	std::cout << delay_cooldown_time << std::endl;
+	std::cout << discovery_cooldown_time << std::endl;
+	std::cout << cast_ssh << std::endl;
 
+	// TEST
 	dv_init();
 	
 	try{

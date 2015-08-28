@@ -12,7 +12,7 @@ mdns_server.o: mdns_server.cpp mdns_server.hpp data_vector.o
 gui_server.o: gui_server.cpp gui_server.hpp data_vector.o
 	g++ $(CXXFLAGS) -c gui_server.cpp $(BOOSTLIBS) 
 
-opoznienia.o: opoznienia.cpp
+opoznienia.o: opoznienia.cpp data_vector.o
 	g++ $(CXXFLAGS) -c opoznienia.cpp $(BOOSTLIBS)
 
 opoznienia: gui_server.o opoznienia.o data_vector.o

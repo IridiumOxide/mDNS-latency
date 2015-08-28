@@ -68,7 +68,6 @@ tcp::socket& gui_connection::socket()
 
 void gui_connection::start()
 {
-	
 	// turn off echo, turn on character mode
 	message_ = "\377\375\042\377\373\001";
 	
@@ -139,7 +138,7 @@ void gui_connection::handle_read(const boost::system::error_code&)
 void gui_connection::empty_handler() {}
 
 void gui_connection::redraw(){
-	// MUTEX OR SOMETHING
+	// TODO: MUTEX OR SOMETHING
 	int total_entries = (*data).size();
 	int total_pages = ((total_entries - 1) / ENTRIES_PER_PAGE) + 1;
 	if(total_pages < 1)
