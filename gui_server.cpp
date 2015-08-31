@@ -6,11 +6,11 @@
 #include <ctime>
 #include <iostream>
 #include <string>
+#include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/asio.hpp>
 #include "gui_server.hpp"
 #include "data_vector.hpp"
 

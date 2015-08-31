@@ -4,6 +4,7 @@
 #include <sstream>
 #include "gui_server.hpp"
 #include "data_vector.hpp"
+#include "mdns_server.hpp"
 
 using boost::asio::ip::tcp;
 
@@ -111,11 +112,15 @@ int main(int argc, char* argv[])
 	// TEST
 	dv_init();
 	
+	//data_vector print_data;
+	data_vector address_data;
+	
 	try{
 		boost::asio::io_service io_service;
 		gui_server server_gui(io_service, ui_port, ui_refresh_time, &(sample_data_vector));
 		std::cout << "UI available on port " << ui_port << std::endl;
-		//mdns_server server_mdns(io_service, discovery_cooldown_time, cast_ssh);
+		mdns_server server_mdns(io_service, &address_data, cast_ssh, discovery_cooldown_time);
+		std::cout << "MDNS sever up" << std::endl;
 		io_service.run();
 	}
 	catch (std::exception& e){
