@@ -66,7 +66,7 @@ delay_data::delay_data(std::string& s){
 }
 
 bool delay_data::operator<(const delay_data& second) const{
-	return get_average() < second.get_average();
+	return get_average() > second.get_average();
 }
 
 

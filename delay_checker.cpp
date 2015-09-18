@@ -274,23 +274,17 @@ void delay_checker::handle_icmp_receive(size_t length){
 		uint64_t tdf = time_difference(&icmp_begin, &icmp_end);
 		tdf /= 1000;
 		d_data.icmp_latency = tdf;
-	
-		check_timer_icmp.expires_from_now(delays_rate);
-		check_timer_icmp.async_wait(boost::bind(&delay_checker::ms_icmp, this, boost::asio::placeholders::error));
-	}else{
-		icmp_receive(boost::system::error_code());
 	}
+	
+	icmp_receive(boost::system::error_code());
 }
 
 
 void delay_checker::handle_icmp_timeout(const boost::system::error_code& e){
-	if(e){
-		return;
-	}
 	if(icmp_num_replies == 0){
 		std::cout << "ICMP TIMEOUT" << std::endl;
+		d_data.icmp_latency = -1;
 	}
-	d_data.icmp_latency = -1;
 	check_timer_icmp.expires_from_now(delays_rate);
 	check_timer_icmp.async_wait(boost::bind(&delay_checker::ms_icmp, this, boost::asio::placeholders::error));
 }
