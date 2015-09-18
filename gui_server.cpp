@@ -1,8 +1,3 @@
-/*
- * TODO:
- * - actual data to display
- */
-
 #include <ctime>
 #include <iostream>
 #include <string>
@@ -138,7 +133,6 @@ void gui_connection::handle_read(const boost::system::error_code&)
 void gui_connection::empty_handler() {}
 
 void gui_connection::redraw(){
-	// TODO: MUTEX OR SOMETHING
 	int total_entries = (*data).size();
 	int total_pages = ((total_entries - 1) / ENTRIES_PER_PAGE) + 1;
 	if(total_pages < 1)

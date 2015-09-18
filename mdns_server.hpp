@@ -10,7 +10,7 @@ using namespace boost::asio::ip;
 class mdns_server
 {
 public:
-	mdns_server(boost::asio::io_service&, data_vector*, bool cast_ssh, float discovery_rate);
+	mdns_server(boost::asio::io_service&, delay_records*, bool cast_ssh, float discovery_rate);
 
 private:
 	void get_my_IP();
@@ -30,7 +30,7 @@ private:
 	bool cast_ssh;
 	int name_id;
 	address_v4 my_IP;
-	data_vector* network_data;
+	delay_records* network_data;
 	udp::socket socket_;
 	udp::endpoint sender_endpoint_;
 	udp::endpoint multicast_endpoint_;

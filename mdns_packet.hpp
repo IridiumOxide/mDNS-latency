@@ -18,9 +18,7 @@ enum{
 
 enum{
 	QTYPE_A = 0x0001,
-	QTYPE_TXT = 0x0010,
 	QTYPE_PTR = 0x000c,
-	QTYPE_SRV = 0x0021,
 	QTYPE_ALL = 0x00FF
 };
 
@@ -46,11 +44,9 @@ public:
 
 	mdns_header(){ std::fill(rep_, rep_ + sizeof(rep_), 0); }
 
-	mdns_header(unsigned short flags, unsigned short qdcount = 0, unsigned short ancount = 0){
+	mdns_header(unsigned short flags){
 		std::fill(rep_, rep_ + sizeof(rep_), 0);
 		set_flags(flags);
-		set_qdcount(qdcount);
-		set_ancount(ancount);
 	}
 	
 	unsigned short get_id(){ return decode(0, 1); }
@@ -62,8 +58,8 @@ public:
 	
 	void set_id(unsigned short n){ encode(0, 1, n); }
 	void set_flags(unsigned short n){ encode(2, 3, n); }
-	void set_ancount(unsigned short n){ encode(4, 5, n); }
-	void set_qdcount(unsigned short n){ encode(6, 7, n); }
+	void set_qdcount(unsigned short n){ encode(4, 5, n); }
+	void set_ancount(unsigned short n){ encode(6, 7, n); }
 	void set_nscount(unsigned short n){ encode(8, 9, n); }
 	void set_arcount(unsigned short n){ encode(10, 11, n); }
 	
@@ -91,6 +87,7 @@ public:
 				s.read(reinterpret_cast<char*>(&buf[i]), sizeof(char));
 			}
 			domain.names.push_back(std::string(buf, buf + x));
+			s.read(reinterpret_cast<char*>(&x), sizeof(char));
 		}
 		return s;
 	}
@@ -111,7 +108,7 @@ public:
 	
 	std::string make_string()
 	{
-		std::string result = ".";
+		std::string result = "";
 		for(unsigned int i = 0; i < names.size(); ++i){
 			result += names[i];
 			result += '.';
@@ -128,8 +125,31 @@ public:
 	{}
 	
 	
+	mdns_domain(std::string x)
+	{
+		std::string new_string = "";
+		for(unsigned int i = 0; i < x.length(); ++i){
+			if(x[i] == '.'){
+				names.push_back(new_string);
+				new_string = "";
+			}else{
+				new_string += x[i];
+			}
+		}
+	}
+			
+	
 	bool operator==(const mdns_domain &d) const{
 		return names == d.names;
+	}
+	
+	// [name.]service.protocol.local
+	std::string& get_service(){
+		return names[names.size() - 3];
+	}
+	
+	std::vector<std::string>& get_names(){
+		return names;
 	}
 	
 private:
@@ -148,7 +168,6 @@ public:
 		question.qtype = be16toh(n);
 		s.read(reinterpret_cast<char*>(&n), sizeof(short));
 		question.qclass = be16toh(n);
-		
 		return s;
 	}
 	
@@ -253,6 +272,9 @@ public:
 		return qtype;
 	}
 	
+	std::vector<unsigned char>& get_rdata(){
+		return rdata;
+	}
 private:
 	mdns_domain domain;
 	unsigned short qtype;
@@ -268,17 +290,44 @@ class mdns_packet
 	
 public:
 	friend std::istream& operator>>(std::istream &s, mdns_packet &packet){
+		std::cout << "----------------------------------------------------" << std::endl;
+		std::cout << "Getting header" << std::endl;
 		s >> packet.header;
 		for(int i = 0; i < packet.header.get_qdcount(); ++i){
+			std::cout << "Getting qn " << i <<" of " << packet.header.get_qdcount() << std::endl;
 			mdns_question question;
 			s >> question;
 			packet.questions.push_back(question);
+			std::cout << question.get_domain().make_string() << std::endl;
+			std::cout << "TEST-SERVICE: " << question.get_domain().get_service() << std::endl;
+			if(question.get_domain().get_service() != "_opoznienia" && question.get_domain().get_service() != "_ssh"){
+				// we don't want to read it, it might be something strange
+				packet.header.set_qdcount(i + 1);
+				std::cout << "??????????????????????????????????????????????????????????" << std::endl;
+				return s;
+			}
 		}
 		for(int i = 0; i < packet.header.get_ancount(); ++i){
+			std::cout << "Getting ar " << i <<" of " << packet.header.get_ancount() << std::endl;
 			mdns_answer answer;
 			s >> answer;
 			packet.answers.push_back(answer);
+			std::cout << answer.get_domain().make_string() << std::endl;
+			if(answer.get_domain().get_service() != "_opoznienia" && answer.get_domain().get_service() != "_ssh"){
+				// we don't want to read it, it might be something strange
+				packet.header.set_ancount(i + 1);
+				std::cout << "??????????????????????????????????????????????????????????" << std::endl;
+				return s;
+			}
+			std::vector<unsigned char> rdt = answer.get_rdata();
+			for(unsigned int i = 0; i < rdt.size(); ++i){
+				std::cout << std::hex << (int)(rdt[i]);
+				std::cout << std::dec;
+			}
+			std::cout << std::endl;
 		}
+		std::cout << "Got packet" << std::endl;
+		std::cout << "----------------------------------------------------" << std::endl;
 		return s;
 	}
 	

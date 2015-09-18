@@ -5,6 +5,7 @@
 #include "gui_server.hpp"
 #include "data_vector.hpp"
 #include "mdns_server.hpp"
+#include "delay_checker.hpp"
 
 using boost::asio::ip::tcp;
 
@@ -110,17 +111,21 @@ int main(int argc, char* argv[])
 	std::cout << cast_ssh << std::endl;
 
 	// TEST
-	dv_init();
+	// dv_init();
 	
-	//data_vector print_data;
-	data_vector address_data;
+	data_vector print_data;
+	delay_records address_data;
 	
 	try{
 		boost::asio::io_service io_service;
-		gui_server server_gui(io_service, ui_port, ui_refresh_time, &(sample_data_vector));
-		std::cout << "UI available on port " << ui_port << std::endl;
 		mdns_server server_mdns(io_service, &address_data, cast_ssh, discovery_cooldown_time);
 		std::cout << "MDNS sever up" << std::endl;
+		udp_server server_udp(io_service, udp_delay_port);
+		std::cout << "UDP server up" << std::endl;
+		delay_manager server_delay(&io_service, &address_data, &print_data, delay_cooldown_time, udp_delay_port);
+		std::cout << "Delay checker up" << std::endl;
+		gui_server server_gui(io_service, ui_port, ui_refresh_time, &print_data);
+		std::cout << "UI available on port " << ui_port << std::endl;
 		io_service.run();
 	}
 	catch (std::exception& e){
